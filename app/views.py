@@ -55,14 +55,16 @@ def index():
 
 @app.route('/nuevacompra', methods=['GET', 'POST'])
 def compra():
+    
     form = CompraForm(request.form)
-    form.monedaComprada.data = int(form.monedaComprada.data)
-    form.monedaPagada.data = int(form.monedaPagada.data)
+   
 
 
     if request.method == 'GET':
         return render_template('nuevacompra.html', form=form)
     else:
+        form.monedaComprada.data = int(form.monedaComprada.data)
+        form.monedaPagada.data = int(form.monedaPagada.data)
         if form.validate():
             conn = sqlite3.connect(database)
             cursor = conn.cursor()
@@ -71,13 +73,20 @@ def compra():
                 (fecha, concepto, id_monedaComprada, cantidadComprada, id_monedaPagada, cantidadPagada)
                 values (?, ?, ?, ?, ?, ?);
             '''
-            rows = cursor.execute(query,(request.form['fecha'],
-                                         request.form['concepto'], 
-                                         request.form['monedaComprada'], 
-                                         request.form['cantidadComprada'], 
-                                         request.form['monedaPagada'], 
-                                         request.form['cantidadPagada']
-            ))
+            try:
+                rows = cursor.execute(query,(request.form['fecha'],
+                                             request.form['concepto'], 
+                                             request.form['monedaComprada'], 
+                                             request.form['cantidadComprada'], 
+                                             request.form['monedaPagada'], 
+                                             request.form['cantidadPagada']
+                ))
+            except sqlite3.Error as e:
+                form.monedaComprada.data = str(form.monedaComprada.data)
+                form.monedaPagada.data = str(form.monedaPagada.data)
+                form.errors['general'] = ["Error en base de datos: {}".format(e)]
+                return render_template('nuevacompra.html', form=form)
+
             conn.commit()
             conn.close()
             '''
@@ -94,7 +103,7 @@ def compra():
             fMovimientos.close()
             '''
             return redirect(url_for('index'))
-
+        form.errors['general'] = ['Error base de datos']
         return render_template('nuevacompra.html', form=form)
 
 
@@ -164,7 +173,9 @@ def recuperarregistro(ix):
             select id, fecha, concepto, id_monedaComprada, cantidadComprada, id_monedaPagada, cantidadPagada from movimientos where id = ?;
             '''
 
+    
     rows = cursor.execute(query, (ix,))
+    
     resp = []
     for row in rows:
         resp.append(row)
@@ -200,8 +211,9 @@ def modificarregistro(values):
                                   values.get('monedaPagada'), values.get('cantidadPagada'),
                                   values.get('ix')
             ))
-    conn.commit()
-    conn.close() 
+    
+    conn.close()
+    conn.commit() 
 
 
     '''
@@ -236,20 +248,25 @@ def modificarregistro(values):
     '''
     
 def borrar(ix):
-    fe = open(ficheromovimientos, 'r')
-    fs = open(ficheronuevo, 'w')
 
-    contador = 1
-    for linea in fe:
-        if contador != ix:
-            fs.write(linea)
-        contador += 1
-    fe.close()
-    fs.close()
+    conn = sqlite3.connect(database)
+    cursor = conn.cursor()
 
-    remove(ficheromovimientos)
-    rename(ficheronuevo, ficheromovimientos)
 
+    query = '''
+        DELETE from movimientos where id = ?
+        '''
+    try:
+        rows = cursor.execute(query, (ix, ))
+    except sqlite3.Error as e:
+        print(e)
+        return
+
+    conn.commit()
+    conn.close()
+
+
+  
 
 def validar(values):
     errores = []
